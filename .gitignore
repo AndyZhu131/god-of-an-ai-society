@@ -1,0 +1,17 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+
+# Local simulation outputs
+/archive_*.json
+/commons_*.json
+/decision_*.json
+/gemma_*.json
+/qwen_*.json
+/run.json
+/runs.json
+*.log
