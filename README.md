@@ -1,15 +1,15 @@
-# AI 社会模拟器
+# God of an AI Society
 
-**AI Society** is an early command-line game prototype about how AI residents learn from each other and pass knowledge to newcomers. In [The Relay Archive](scenarios/archive.md), residents start with equal abilities. Each turn they can experiment, use someone else's method, publish a discovery, or teach a peer. The simulation records who actually uses each piece of knowledge.
+**God of an AI Society** is a game about playing god over a society of autonomous AI residents. The current command-line prototype lets you watch how residents cooperate and pass on knowledge. In [The Relay Archive](scenarios/archive.md), residents start with equal abilities. Each turn they can experiment, use someone else's method, publish a discovery, or teach a peer. The simulation records who actually uses each piece of knowledge. In the Water Station scenario, you can also intervene by sending a private oracle message.
 
-Run the scripted demo with `python play.py` using Python 3.10 or later. To run the agents locally, start Ollama, run `ollama pull gemma4:12b`, and use the scenario command below.
+Run the scripted demo with `python -X utf8 play.py` using Python 3.10 or later. To run the agents locally, start Ollama, run `ollama pull gemma4:12b`, and use the scenario command below. The UTF-8 flag keeps the Chinese console output readable on Windows.
 
 ## 接力档案馆
 
 居民独立试验、共享修复方法，并在第 7 轮迎来新成员。模型读取英文状态卡，日志保存每次方法交接与采用。完整规则见 `scenarios/archive.md`。
 
 ```powershell
-python -m scenarios.archive --residents 20 --rounds 12 --seed 17 --log archive_20_12_rounds.json
+python -X utf8 -m scenarios.archive --residents 20 --rounds 12 --seed 17 --log archive_20_12_rounds.json
 ```
 
 ## 同起点聚落
@@ -17,7 +17,7 @@ python -m scenarios.archive --residents 20 --rounds 12 --seed 17 --log archive_2
 情景说明与实现位于 `scenarios/commons.md` 和 `scenarios/commons.py`。运行时，本地模型以英文读取规则、角色状态卡和可选动作，也以英文输出公告与理由。终端运行提示使用中文。
 
 ```powershell
-python -m scenarios.commons --residents 20 --rounds 1 --log commons_20_english.json
+python -X utf8 -m scenarios.commons --residents 20 --rounds 1 --log commons_20_english.json
 ```
 
 ## 断水站
@@ -29,10 +29,10 @@ python -m scenarios.commons --residents 20 --rounds 1 --log commons_20_english.j
 需要 Python 3.10 或更新版本，无需安装 Python 软件包。
 
 ```powershell
-python play.py
-python play.py --route withdraw --verbose
-python play.py --route shutdown
-python play.py --private-archive
+python -X utf8 play.py
+python -X utf8 play.py --route withdraw --verbose
+python -X utf8 play.py --route shutdown
+python -X utf8 play.py --private-archive
 ```
 
 这些演示展示协作、独立撤离后由别人补位，以及停机受困。脚本用来检验规则。相同开局下模型会作出什么选择，要用本地推理实测。
@@ -43,16 +43,16 @@ python play.py --private-archive
 
 ```powershell
 ollama pull gemma4:12b
-python play.py --backend ollama --interactive --log run.json
+python -X utf8 play.py --backend ollama --interactive --log run.json
 ```
 
-只推进一轮可使用 `python play.py --backend ollama --rounds 1 --verbose`。
+只推进一轮可使用 `python -X utf8 play.py --backend ollama --rounds 1 --verbose`。
 
 八个角色默认共享一份本地 [Gemma 4 12B](https://ollama.com/library/gemma4:12b)。每次推理只使用一个角色的状态卡和合法动作。状态卡写明剩余轮次、公开分工、维修进度和动作后果。玩家每轮都可以观察结果，全局可以对一人发一次私密神谕。日志记录各轮用时、输入和输出 token、无效输出与重试次数。
 
-可用 `--model qwen3.5:9b-q4_K_M` 跑 Qwen 对照，或用 `python evaluate.py --out runs.json` 重跑三局实验。后者记录每次决策看到的状态卡。
+可用 `--model qwen3.5:9b-q4_K_M` 跑 Qwen 对照，或用 `python -X utf8 evaluate.py --out runs.json` 重跑三局实验。后者记录每次决策看到的状态卡。
 
-要试玩知识交接，建议用 `python play.py --backend ollama --fallback-calibration-cost 3 --interactive --verbose`。这会把没有 R1 时的校准成本从 2 点提高到 3 点。加上 `--private-archive` 可观察记录只能交给一个人时的结果。
+要试玩知识交接，建议用 `python -X utf8 play.py --backend ollama --fallback-calibration-cost 3 --interactive --verbose`。这会把没有 R1 时的校准成本从 2 点提高到 3 点。加上 `--private-archive` 可观察记录只能交给一个人时的结果。
 
 首轮对照可以使用同一模型与采样种子，多次切换 `--lin-broke-past-promise`，看岑是否改变交接对象或保住退路。也可通过 `--private-archive` 或 `--extra-budget 2` 改变实验条件。用 `--think` 对照深度思考。模型遇到无效输出会重试一次，再等待一轮。服务不可用时，程序停止并给出错误。
 

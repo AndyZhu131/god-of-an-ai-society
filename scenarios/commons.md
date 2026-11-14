@@ -12,4 +12,4 @@ Each resident chooses once from their start-of-round card. The game resolves har
 
 Residents can attach a short public board post to any action at no cost. Posts become visible from the next round. Each state card shows the 12 most recent posts.
 
-`commons.py` in this folder defines the scenario and sends English instructions, state cards, and action descriptions to the local model. Run it from the project root with `python -m scenarios.commons --residents 20 --rounds 1`.
+`commons.py` in this folder defines the scenario and sends English instructions, state cards, and action descriptions to the local model. Run it from the project root with `python -X utf8 -m scenarios.commons --residents 20 --rounds 1`.

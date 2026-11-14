@@ -1,1 +1,1 @@
-"""Playable scenarios for AI Society."""
+"""Playable scenarios for God of an AI Society."""

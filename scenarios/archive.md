@@ -17,5 +17,5 @@ All residents decide from the same round boundary. New notes and board posts bec
 The log records a method's original successful trial, who published or taught it, and which repairs used it. It also marks repairs by newcomers and repairs based on discoveries or notes whose creators have left.
 
 ```powershell
-python -m scenarios.archive --residents 20 --rounds 12 --seed 17 --log archive_20_12_rounds.json
+python -X utf8 -m scenarios.archive --residents 20 --rounds 12 --seed 17 --log archive_20_12_rounds.json
 ```
