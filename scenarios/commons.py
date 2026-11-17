@@ -3,13 +3,12 @@
 import argparse
 import json
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
 from time import perf_counter
 
+from agents import Action, ActionOutcome, AgentHarness, DecisionTrace, Policy, Turn
 from decisions import DEFAULT_MODEL, ModelUnavailable, OllamaPolicy
-from station import Action, Decision, Turn
 
 
 PROMPT = """You are a resident of this settlement. Read the start-of-round state card and choose one legal action.
@@ -23,7 +22,6 @@ ACTIONS = (
     Action("maintain", "Restore 2 extra food units to the common stock at the end of the round", 0, "maintain"),
     Action("wait", "Wait", 0, "wait"),
 )
-ACTION_IDS = {action.id for action in ACTIONS}
 
 
 class Commons:
@@ -64,13 +62,15 @@ class Commons:
             "recent_board_posts": self.board[-12:],
             "legal_actions": [{"id": action.id, "description": action.label} for action in ACTIONS],
         }
-        return Turn(resident, json.dumps(card, ensure_ascii=False), ACTIONS)
+        return Turn(resident, json.dumps(card, ensure_ascii=False), ACTIONS, self.round)
 
-    def advance(self, decide: Callable[[Turn], Decision]) -> dict:
+    def advance(self, decide: Policy | AgentHarness) -> dict:
         turns = [self.snapshot(resident) for resident in self.reserves]
-        decisions = {turn.resident_id: decide(turn) for turn in turns}
-        choices = {resident: d.action_id if d.action_id in ACTION_IDS else "wait"
-                   for resident, d in decisions.items()}
+        harness = AgentHarness.wrap(decide)
+        decisions = harness.collect(turns)
+        submitted = {turn.resident_id: turn.action_for(decisions[turn.resident_id]) for turn in turns}
+        choices = {resident: action.id if action is not None else "wait"
+                   for resident, action in submitted.items()}
         harvested = []
         missed_harvest = []
         order = list(self.reserves)
@@ -93,8 +93,26 @@ class Commons:
         for resident, reserve in self.reserves.items():
             self.reserves[resident] = max(0, reserve - self.meal)
         posts = [{"resident": resident, "message": d.message.strip()[:120], "round": self.round}
-                 for resident, d in decisions.items() if d.action_id in ACTION_IDS and d.message.strip()]
+                 for resident, d in decisions.items() if submitted[resident] is not None and d.message.strip()]
         self.board.extend(posts)
+        posted = {post["resident"] for post in posts}
+        outcomes = {}
+        denied = set(missed_harvest)
+        hungry = set(unfed)
+        for resident, action_id in choices.items():
+            status = "applied"
+            if submitted[resident] is None:
+                status = "fallback"
+            elif resident in denied:
+                status = "unavailable"
+            elif action_id == "wait":
+                status = "waited"
+            outcomes[resident] = ActionOutcome(action_id, status, details={
+                "food_after_meal": self.reserves[resident],
+                "missed_meal": resident in hungry,
+                "posted": resident in posted,
+            })
+        harness.settle(outcomes)
         self.last_round = {
             "harvested": len(harvested), "missed_harvest": len(missed_harvest),
             "maintained": counts["maintain"], "missed_meal": len(unfed),
@@ -121,28 +139,29 @@ def main() -> int:
     commons = Commons(args.residents)
     policy = OllamaPolicy(args.model, prompt=PROMPT)
     rounds = []
+    durations = {}
+
+    def show_decision(trace: DecisionTrace) -> None:
+        resident = trace.turn.resident_id
+        durations[resident] = trace.seconds
+        print(f"  {resident} {trace.decision.action_id} ({trace.seconds} 秒)", flush=True)
+
+    harness = AgentHarness(policy, record=args.log is not None, on_decision=show_decision)
     for _ in range(args.rounds):
-        durations = {}
-
-        def decide(turn: Turn) -> Decision:
-            started = perf_counter()
-            decision = policy(turn)
-            durations[turn.resident_id] = round(perf_counter() - started, 3)
-            print(f"  {turn.resident_id} {decision.action_id} ({durations[turn.resident_id]} 秒)", flush=True)
-            return decision
-
+        durations.clear()
         print(f"第 {commons.round} 轮 · {args.residents} 名居民 · {args.model}", flush=True)
         started = perf_counter()
         try:
-            result = commons.advance(decide)
+            result = commons.advance(harness)
         except ModelUnavailable as error:
             parser.exit(1, f"{error}\n")
         result["seconds"] = round(perf_counter() - started, 3)
-        result["decision_seconds"] = durations
+        result["decision_seconds"] = durations.copy()
         rounds.append(result)
         if args.log:
             report = {"model": args.model, "language": "en", "population": args.residents,
-                      "posting": "optional_with_action", "stats": asdict(policy.stats), "rounds": rounds}
+                      "posting": "optional_with_action", "stats": asdict(policy.stats), "rounds": rounds,
+                      "agent_instructions": policy.prompt, "decision_trace": harness.export()}
             args.log.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"全轮 {result['seconds']} 秒。公共库存 {result['stock_start']} → {result['stock_end']}。",
               flush=True)

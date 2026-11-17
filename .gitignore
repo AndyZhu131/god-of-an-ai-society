@@ -7,11 +7,16 @@ __pycache__/
 !.env.example
 
 # Local simulation outputs
+/after_the_bounty.json
+/after_the_bounty_*.json
 /archive_*.json
 /commons_*.json
 /decision_*.json
 /gemma_*.json
 /qwen_*.json
+/rain_benchmark/
+/rain_pull_status.jsonl
 /run.json
 /runs.json
+/werewolf_*.json
 *.log

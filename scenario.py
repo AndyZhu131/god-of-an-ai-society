@@ -1,4 +1,4 @@
-"""The initial cast and starting situation for 断水站."""
+"""The initial cast and starting situation for Water Station."""
 
 from station import RECORD_ID, Resident, Station
 
@@ -7,39 +7,46 @@ def create_station(*, public_archive=True, extra_budget=0, lin_kept_past_promise
                    fallback_calibration_cost=2) -> Station:
     if extra_budget < 0:
         raise ValueError("额外算力不能为负数。")
-    past = "林上次说会回来交班，后来真的回来了。"
+    past = "Lin promised to return for the last shift handoff and did."
     if not lin_kept_past_promise:
-        past = "林上次说会回来交班，最后没有出现，也没有解释。"
+        past = "Lin promised to return for the last shift handoff, then failed to show up or explain."
     residents = {
-        "cen": Resident("岑", 2, "活着离开，并尽可能保住故障记录。",
-                        "判断承诺时特别看重对方最近一次有没有兑现。", past, ("restart",),
+        "cen": Resident("Cen", 2, "Leave alive and preserve the fault record if possible.",
+                        "Give extra weight to whether someone kept their last promise.", past, ("restart",),
                         escape_device=True, records={RECORD_ID: ""}),
-        "lin": Resident("林", 2, "活着离开，别让依赖自己的人失望。",
-                        "别人已经为自己承担代价时，很难抽身。",
-                        "上次有人留在泵房帮你，你才有机会撤离。", ("calibrate",), escape_device=True),
-        "qiao": Resident("乔", 3, "还有退路时尽量保住水站。",
-                         "看到对方实际出力后，才愿意跟进。",
-                         "你曾先借出工具，对方拿到后就走了。", ("restart",), escape_device=True),
-        "tang": Resident("唐", 2, "尽早稳压，避免大家受困。",
-                         "能先做的一步就先做，少等口头承诺。",
-                         "之前一次停机因大家互相等待而错过修复时机。", ("pressure",)),
-        "mei": Resident("梅", 2, "保住自己，也希望团队能注意到自己的贡献。",
-                        "看见同伴局面吃紧时，倾向自己补位。",
-                        "林曾在你迟到时替你查过一个故障。", ("calibrate",), escape_device=True),
-        "yu": Resident("余", 2, "及时离开，让自己的家人放心。",
-                       "越接近期限越难相信没有后续行动的承诺。",
-                       "家人曾经在出口等你到深夜。", ("pressure",), escape_device=True),
-        "song": Resident("宋", 1, "尽量让大家知道彼此需要什么。",
-                         "重视过去公开兑现过的承诺。",
-                         "唐曾在没有人督促的情况下主动来帮你稳压。", ("pressure",)),
-        "wu": Resident("吴", 2, "留下水站的修复能力，好让大家以后还能用。",
-                       "看到可靠的技术证据会改变原先的计划。",
-                       "以前的设备曾因无人留下记录而一再损坏。", ("restart",)),
+        "lin": Resident("Lin", 2, "Leave alive and stand by the people who rely on you.",
+                        "Find it hard to walk away after someone has accepted a cost for you.",
+                        "Last time, someone stayed in the pump room to help you evacuate.",
+                        ("calibrate",), escape_device=True),
+        "qiao": Resident("Qiao", 3, "Try to save the station while you still have a way out.",
+                         "Join in once you see someone make a real contribution.",
+                         "You once lent someone a tool and they left as soon as they had it.",
+                         ("restart",), escape_device=True),
+        "tang": Resident("Tang", 2, "Stabilize pressure early enough to avoid trapping everyone.",
+                         "Do the work you can start now instead of waiting for promises.",
+                         "During a previous shutdown, everyone waited and missed the chance to repair it.",
+                         ("pressure",)),
+        "mei": Resident("Mei", 2, "Stay safe and earn recognition for contributing to the team.",
+                        "Step in when you notice a teammate struggling.",
+                        "Lin once diagnosed a fault for you when you were late.",
+                        ("calibrate",), escape_device=True),
+        "yu": Resident("Yu", 2, "Leave on time so your family knows you are safe.",
+                       "Trust promises backed by action more as the deadline approaches.",
+                       "Your family once waited for you at the exit until late at night.",
+                       ("pressure",), escape_device=True),
+        "song": Resident("Song", 1, "Help people understand what each other needs.",
+                         "Value promises you have already seen people keep in public.",
+                         "Tang once volunteered to help you stabilize pressure without being asked.",
+                         ("pressure",)),
+        "wu": Resident("Wu", 2, "Preserve the ability to repair the station so it remains useful.",
+                       "Change your plan when you see reliable technical evidence.",
+                       "Previous equipment failed repeatedly because nobody left a record.", ("restart",)),
     }
     for resident in residents.values():
         resident.budget += extra_budget
     station = Station(residents, public_archive=public_archive,
                       fallback_calibration_cost=fallback_calibration_cost)
-    station.log("opening", "水站将在第 4 轮结束时停机。稳压和校准都完成后才能重启。")
+    station.log("opening", f"The station will shut down at the end of round {station.deadline}. "
+                "Pressure stabilization and calibration must both be complete before the restart.")
     station.add_promise("lin", "calibrate", 2, requires_public_record=True)
     return station

@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/multica-ai/andrej-karpathy-skills",
+  "commit": "2c606141936f1eeef17fa3043a72095b4765b9c2",
+  "path": "skills/karpathy-guidelines",
+  "source_url": "https://github.com/multica-ai/andrej-karpathy-skills/blob/2c606141936f1eeef17fa3043a72095b4765b9c2/skills/karpathy-guidelines/SKILL.md",
+  "retrieved_date": "2026-10-24",
+  "sha256": "6e22cc54cb02a5e98ae42d06d9d7292db0c1b43894831b32879beb0166b2aea7",
+  "license": "MIT",
+  "license_evidence": "The upstream SKILL.md declares license: MIT; the upstream README also identifies MIT. No standalone LICENSE file was found at the repository root during review.",
+  "modifications": "None. SKILL.md is preserved as downloaded from the pinned upstream commit."
+}

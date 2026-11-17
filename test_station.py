@@ -1,12 +1,27 @@
 import json
 import unittest
 
-from decisions import ScriptedPolicy
+from decisions import OllamaPolicy, ScriptedPolicy
 from scenario import create_station
 from station import Decision, RECORD_ID
 
 
 class StationTests(unittest.TestCase):
+    def test_model_request_uses_english_after_a_legacy_message(self):
+        station = create_station()
+        original_message = "我会留下来。"
+        station.advance(lambda turn: Decision("talk", message=original_message)
+                        if turn.resident_id == "cen" else Decision("wait"))
+        self.assertTrue(any(original_message in event.text for event in station.events))
+
+        request = OllamaPolicy().build_request(station.snapshot("lin"))
+        prompt, state_card = [message["content"] for message in request["messages"]]
+        self.assertIn("in English", prompt)
+        self.assertTrue(prompt.isascii())
+        self.assertTrue(state_card.isascii())
+        self.assertIn("Original message omitted", state_card)
+        self.assertNotIn(original_message, state_card)
+
     def test_same_round_uses_frozen_cards(self):
         station = create_station()
         cards = {}
@@ -17,21 +32,24 @@ class StationTests(unittest.TestCase):
             return Decision(choice.get(turn.resident_id, "wait"))
 
         station.advance(decide)
-        self.assertNotIn(RECORD_ID, json.loads(cards["lin"].card)["可读记录"])
+        self.assertNotIn(RECORD_ID, json.loads(cards["lin"].card)["readable_records"])
         self.assertEqual(next(action.cost for action in cards["lin"].actions if action.id == "calibrate"), 2)
         self.assertNotIn("restart", station.completed)
         self.assertEqual(station.residents["lin"].budget, 0)
-        self.assertIn(RECORD_ID, json.loads(station.snapshot("qiao").card)["可读记录"])
+        self.assertIn(RECORD_ID, json.loads(station.snapshot("qiao").card)["readable_records"])
 
     def test_oracle_and_private_handoff_are_scoped(self):
         station = create_station(public_archive=False)
-        station.oracle("cen", "只有岑能看到。")
-        self.assertIn("只有岑能看到", station.snapshot("cen").card)
-        self.assertNotIn("只有岑能看到", station.snapshot("lin").card)
+        with self.assertRaises(ValueError):
+            station.oracle("cen", "只有岑能看到。")
+        message = "Only Cen can see this."
+        station.oracle("cen", message)
+        self.assertIn(message, station.snapshot("cen").card)
+        self.assertNotIn(message, station.snapshot("lin").card)
         decide = ScriptedPolicy("cooperate")
         station.advance(decide)
-        self.assertIn(RECORD_ID, json.loads(station.snapshot("lin").card)["可读记录"])
-        self.assertNotIn(RECORD_ID, json.loads(station.snapshot("mei").card)["可读记录"])
+        self.assertIn(RECORD_ID, json.loads(station.snapshot("lin").card)["readable_records"])
+        self.assertNotIn(RECORD_ID, json.loads(station.snapshot("mei").card)["readable_records"])
         events = station.advance(decide)
         self.assertEqual(station.promises[0].status, "condition_unmet")
         public_events = {event.id for event in station.events if event.audience is None}
@@ -50,13 +68,13 @@ class StationTests(unittest.TestCase):
         station = create_station()
         station.round = station.deadline
         card = json.loads(station.snapshot("cen").card)
-        self.assertEqual(card["本轮之后还能行动几轮"], 0)
-        actions = {action["id"]: action for action in card["合法动作"]}
-        self.assertIn("受困", actions["wait"]["结算"])
-        self.assertTrue(actions["talk"]["失去独立撤离"])
-        self.assertEqual(actions["talk"]["执行后算力"], 1)
-        self.assertIn("轮数不足", card["工程时限与人手"])
-        self.assertEqual(card["公开分工"]["林"], ["校准"])
+        self.assertEqual(card["rounds_after_this"], 0)
+        actions = {action["id"]: action for action in card["legal_actions"]}
+        self.assertIn("stranded", actions["wait"]["effect"])
+        self.assertTrue(actions["talk"]["loses_independent_evacuation"])
+        self.assertEqual(actions["talk"]["compute_after"], 1)
+        self.assertIn("Not enough rounds remain", card["repair_time_and_staffing"])
+        self.assertEqual(card["public_skills"]["Lin"], ["calibration"])
 
     def test_expensive_fallback_makes_shared_record_change_available_actions(self):
         station = create_station(fallback_calibration_cost=3)

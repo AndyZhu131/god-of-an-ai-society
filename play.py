@@ -1,4 +1,4 @@
-"""Run 断水站 in a terminal, with an optional full event export."""
+"""Run Water Station in a terminal, with an optional full event export."""
 
 import argparse
 import json
@@ -6,9 +6,9 @@ from dataclasses import asdict
 from pathlib import Path
 from time import perf_counter
 
-from decisions import DEFAULT_MODEL, ModelUnavailable, OllamaPolicy, ScriptedPolicy
+from agents import AgentHarness
+from decisions import ModelUnavailable, OllamaPolicy, ScriptedPolicy
 from scenario import create_station
-from station import STEPS
 
 
 HIGHLIGHTS = {"archive", "handoff", "record_used", "work", "promise_result",
@@ -19,6 +19,11 @@ STATUS = {
     "evacuated": "已撤离",
     "rescued": "获救",
     "stranded": "受困",
+}
+STEP_LABELS = {"pressure": "稳压", "calibrate": "校准", "restart": "重启"}
+RESIDENT_LABELS = {
+    "cen": "岑", "lin": "林", "qiao": "乔", "tang": "唐",
+    "mei": "梅", "yu": "余", "song": "宋", "wu": "吴",
 }
 
 
@@ -31,28 +36,34 @@ def show_events(events):
 
 def show_station(station):
     print("  " + " → ".join(f"{label} {'✓' if key in station.completed else '○'}"
-                              for key, label in STEPS.items()), flush=True)
-    print("  " + " ｜ ".join(f"{resident.name} {resident.budget}点 {STATUS[resident.status]}"
-                             for resident in station.residents.values()), flush=True)
+                              for key, label in STEP_LABELS.items()), flush=True)
+    print("  " + " ｜ ".join(f"{RESIDENT_LABELS[key]} {resident.budget}点 {STATUS[resident.status]}"
+                             for key, resident in station.residents.items()), flush=True)
 
 
 def player_turn(station):
     if station.oracle_used:
         input("按 Enter 进入下一轮。")
         return
-    recipients = {key: resident.name for key, resident in station.residents.items() if resident.status == "active"}
+    recipients = {key: RESIDENT_LABELS[key] for key, resident in station.residents.items()
+                  if resident.status == "active"}
     print("本局可发一次私密神谕。接收者 " + " / ".join(recipients.values()))
     while True:
         name = input("输入名字发神谕，或按 Enter 跳过：").strip()
         if not name:
             return
-        recipient = next((key for key, value in recipients.items() if name in {key, value}), None)
+        recipient = next((key for key, value in recipients.items() if name.lower() == key or name == value), None)
         if recipient is None:
             print("请选择可行动的角色。")
             continue
-        message = input("神谕内容（按 Enter 取消）：").strip()
-        if message:
+        message = input("神谕内容，请用英文（按 Enter 取消）：").strip()
+        if not message:
+            return
+        try:
             station.oracle(recipient, message)
+        except ValueError as error:
+            print(error)
+            continue
         return
 
 
@@ -60,7 +71,7 @@ def main():
     parser = argparse.ArgumentParser(description="断水站 · 八人回合模拟原型")
     parser.add_argument("--backend", choices=("scripted", "ollama"), default="scripted")
     parser.add_argument("--route", choices=("cooperate", "withdraw", "shutdown"), default="cooperate")
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model", help="覆盖当前模式的默认模型。")
     parser.add_argument("--think", action="store_true", help="使用模型的深度思考模式，适合对照测试。")
     parser.add_argument("--seed", type=int, help="传给 Ollama 的采样种子。")
     parser.add_argument("--interactive", action="store_true", help="每轮暂停，并允许发送一次神谕。")
@@ -71,7 +82,7 @@ def main():
     parser.add_argument("--extra-budget", type=int, default=0, help="每名角色获得相同的额外算力。")
     parser.add_argument("--lin-broke-past-promise", action="store_true", help="改变岑记得的那一次林的旧承诺。")
     parser.add_argument("--verbose", action="store_true", help="展示全部日志，包含私信和角色自述。")
-    parser.add_argument("--log", type=Path, help="导出完整事件和模型统计到 JSON。")
+    parser.add_argument("--log", type=Path, help="导出角色决策、完整事件和模型统计到 JSON。")
     args = parser.parse_args()
     if args.extra_budget < 0:
         parser.error("--extra-budget 不能为负数。")
@@ -82,7 +93,7 @@ def main():
                              lin_kept_past_promise=not args.lin_broke_past_promise,
                              fallback_calibration_cost=args.fallback_calibration_cost)
     model = OllamaPolicy(args.model, think=args.think, seed=args.seed) if args.backend == "ollama" else None
-    decide = model or ScriptedPolicy(args.route)
+    harness = AgentHarness(model or ScriptedPolicy(args.route), record=args.log is not None)
     round_seconds = []
     print("断水站", flush=True)
     show_events(station.events)
@@ -94,10 +105,10 @@ def main():
             except EOFError:
                 return 0
         if model:
-            print(f"  {args.model} 正在依次做决定…", flush=True)
+            print(f"  {model.model} 正在依次做决定…", flush=True)
         started = perf_counter()
         try:
-            events = station.advance(decide)
+            events = station.advance(harness)
         except ModelUnavailable as error:
             parser.exit(1, f"{error}\n脚本演示命令：python play.py\n")
         round_seconds.append(round(perf_counter() - started, 3))
@@ -127,6 +138,8 @@ def main():
             },
             "round_seconds": round_seconds,
             "stats": asdict(model.stats) if model else {},
+            "agent_instructions": model.prompt if model else None,
+            "decision_trace": harness.export(),
             "residents": {key: {"name": resident.name, "status": resident.status, "budget": resident.budget}
                           for key, resident in station.residents.items()},
             "events": events,

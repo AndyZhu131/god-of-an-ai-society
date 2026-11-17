@@ -3,14 +3,13 @@
 import argparse
 import json
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from random import Random
 from time import perf_counter
 
+from agents import Action, ActionOutcome, AgentHarness, Policy, Turn
 from decisions import DEFAULT_MODEL, ModelUnavailable, OllamaPolicy
-from station import Action, Decision, Turn
 
 
 PROMPT = """You are the resident on the state card. Pick one legal action for this round.
@@ -83,9 +82,11 @@ class Archive:
         queue = [first, *rng.sample(other_families, len(other_families))]
         return Resident(tuple(queue[i % len(queue)] for i in range(rounds + 1)), newcomer)
 
-    def snapshot(self, key: str) -> Turn:
-        actor = self.residents[key]
-        peers = {other: resident.family for other, resident in self.residents.items() if other != key}
+    def snapshot(self, key: str, *, roster: dict[str, Resident] | None = None) -> Turn:
+        if roster is None:
+            roster = self.residents
+        actor = roster[key]
+        peers = {other: resident.family for other, resident in roster.items() if other != key}
         actions = [WAIT]
         known = actor.methods.get(actor.family)
         for setting in SETTINGS:
@@ -120,7 +121,7 @@ class Archive:
             "known_methods": {name: method.setting for name, (method, _) in actor.methods.items()},
             "other_workshops_current_devices": peers,
             "notes_for_your_current_device": [{"id": note.id, "author": note.author,
-                                                "author_has_left": note.author in self.retired,
+                                                "author_has_left": note.author not in roster,
                                                 "setting": note.method.setting} for note in uses],
             "recent_board_posts": self.board[-6:],
             "rules": [
@@ -133,33 +134,51 @@ class Archive:
             ],
             "legal_actions": {action.id: action.label for action in actions},
         }
-        return Turn(key, json.dumps(card, ensure_ascii=False, separators=(",", ":")), tuple(actions))
+        return Turn(key, json.dumps(card, ensure_ascii=False, separators=(",", ":")), tuple(actions), self.round)
 
-    def advance(self, decide: Callable[[Turn], Decision]) -> dict:
+    def advance(self, decide: Policy | AgentHarness) -> dict:
+        roster = self.residents
         turnover = {}
         if self.round == RETIRE_ROUND:
-            for key in self.departures:
-                del self.residents[key]
-            self.retired.update(self.departures)
-            self.residents.update(self.arrivals)
+            roster = {key: actor for key, actor in self.residents.items() if key not in self.departures}
+            roster.update(self.arrivals)
             turnover = {"departures": self.departures, "arrivals": list(self.arrivals)}
-        turns = [self.snapshot(key) for key in self.residents]
-        decisions = {turn.resident_id: decide(turn) for turn in turns}
+        turns = [self.snapshot(key, roster=roster) for key in roster]
+        harness = AgentHarness.wrap(decide)
+        decisions = harness.collect(turns)
+        if turnover:
+            self.residents = roster
+            self.retired.update(self.departures)
         events = []
         choices = Counter()
         posts = []
+        outcomes = {}
         for turn in turns:
             key = turn.resident_id
             decision = decisions[key]
-            action = next((option for option in turn.actions if option.id == decision.action_id), WAIT)
+            submitted = turn.action_for(decision)
+            action = submitted or WAIT
             choices[action.kind] += 1
+            status = "fallback" if submitted is None else "waited"
+            event = None
             if action.kind in {"test", "use", "memory"}:
-                events.append(self.test(key, action))
+                event = self.test(key, action)
+                status = "applied" if event["success"] else "failed"
             elif action.kind in {"archive", "teach"}:
-                events.append(self.share(key, action))
-            if action.id == decision.action_id and decision.message.strip():
+                event = self.share(key, action)
+                status = "conflict" if event["kind"] == "duplicate_archive" else "applied"
+            posted = submitted is not None and bool(decision.message.strip())
+            if posted:
                 posts.append({"resident": key, "round": self.round, "message": decision.message.strip()[:140]})
+            if event is not None:
+                events.append(event)
+            event_ids = ()
+            if event is not None:
+                reference = event["existing_note"] if status == "conflict" else event["id"]
+                event_ids = (reference,)
+            outcomes[key] = ActionOutcome(action.id, status, event_ids, {"posted": posted})
         self.board.extend(posts)
+        harness.settle(outcomes)
         result = {"round": self.round, "turnover": turnover, "actions": dict(choices),
                   "decisions": {key: asdict(choice) for key, choice in decisions.items()},
                   "events": events, "posts": posts,
@@ -224,19 +243,21 @@ def main() -> int:
         parser.error("至少需要两名居民和一轮。")
     archive = Archive(args.residents, args.seed, args.rounds)
     policy = OllamaPolicy(args.model, seed=args.seed, prompt=PROMPT)
+    harness = AgentHarness(policy, record=args.log is not None)
     rounds = []
     for _ in range(args.rounds):
         started = perf_counter()
         print(f"第 {archive.round} 轮 · {args.residents} 名居民 · {args.model}", flush=True)
         try:
-            result = archive.advance(policy)
+            result = archive.advance(harness)
         except ModelUnavailable as error:
             parser.exit(1, f"{error}\n")
         result["seconds"] = round(perf_counter() - started, 3)
         rounds.append(result)
         if args.log:
             report = {"model": args.model, "seed": args.seed, "population": args.residents,
-                      "stats": asdict(policy.stats), "rounds": rounds}
+                      "stats": asdict(policy.stats), "rounds": rounds,
+                      "agent_instructions": policy.prompt, "decision_trace": harness.export()}
             args.log.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
         print(f"  {result['actions']} · {result['seconds']} 秒", flush=True)
     print(json.dumps(asdict(policy.stats)), flush=True)
