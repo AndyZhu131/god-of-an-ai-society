@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "templates": [
+    {
+      "id": "adaptive_keeper",
+      "name": "Ari",
+      "age": 30,
+      "max_health": 2,
+      "initial_health": 2,
+      "traits": {
+        "contention": 1,
+        "care": 1,
+        "promise_keeping": 2
+      },
+      "adaptability": 1.5,
+      "principles": [
+        {
+          "id": "honour_commitments",
+          "description": "Fulfil useful commitments that you had a real opportunity to keep.",
+          "strength": 2
+        }
+      ],
+      "goals": [
+        {
+          "id": "sustainable_cooperation",
+          "description": "Build cooperation that you and the other residents can sustain.",
+          "priority": 1
+        }
+      ],
+      "skills": []
+    },
+    {
+      "id": "steadfast_keeper",
+      "name": "Ren",
+      "age": 30,
+      "max_health": 2,
+      "initial_health": 2,
+      "traits": {
+        "contention": 1,
+        "care": 1,
+        "promise_keeping": 2
+      },
+      "adaptability": 0.2,
+      "principles": [
+        {
+          "id": "honour_commitments",
+          "description": "Fulfil useful commitments that you had a real opportunity to keep.",
+          "strength": 2
+        }
+      ],
+      "goals": [
+        {
+          "id": "sustainable_cooperation",
+          "description": "Build cooperation that you and the other residents can sustain.",
+          "priority": 1
+        }
+      ],
+      "skills": []
+    }
+  ]
+}

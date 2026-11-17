@@ -1,6 +1,6 @@
 # Core simulation plan
 
-Status — Proposed development plan. The contracts and acceptance conditions below are design proposals. They have not been implemented or validated as a general simulation core.
+Status — Proposed development plan. The first [character data contract](character-data.md) is implemented on the development branch. World data, experience-driven growth, and a general simulation core remain planned.
 
 ## Objective
 
@@ -170,4 +170,4 @@ The first scenario checks playability. A second small scenario checks that chara
 4. An execution walkthrough in which the same event changes two observers differently.
 5. A runnable small social test after those contracts have been reviewed.
 
-The next design step is deliverable 1. Numeric update rates, internal scales, and timing units remain proposals until the small tests establish useful behavior.
+Deliverable 1 has an initial implementation in [society/characters.py](../society/characters.py), example templates, and save/load tests. The next step is world data and the event/observation contract, followed by an explicit character-change walkthrough. Numeric update rates, internal scales, and timing units remain proposals until the small tests establish useful behavior.

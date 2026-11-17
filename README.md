@@ -8,6 +8,8 @@ Run the scripted demo with `python -X utf8 play.py` using Python 3.10 or later. 
 
 [Agent harness and decision logs](docs/agents.md) explains what each resident sees, how the model submits an action, and how to trace the result.
 
+Development has started on the shared [character data contract](docs/character-data.md). Use `python -X utf8 -m society --template adaptive_keeper --resident-id ari` to inspect an example resident.
+
 ## 焚船之后
 
 12 名居民在岛上争用船具房、学习与传授技艺，并在 1808 年决定是否接触外船。规则和历史背景见[场景设计](scenarios/after_the_bounty/design.md)。启动本地 Ollama 后，在项目根目录运行以下命令。默认使用 `phi4-mini:3.8b`。
